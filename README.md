@@ -23,3 +23,7 @@ kubectl -n elastic-kibana apply -f kibana-demo.yaml
 kubectl -n elastic-kibana get pods
 #Kibana
 kubectl -n elastic-kibana port-forward svc/kibana 5601
+# How to create the scrects with username password
+kubectl create secret generic elasticsearch-credentials --from-literal=password='kibana'
+
+kubectl create secret generic elasticsearch-credentials --from-literal=username='elastic' --from-literal=password='kibana' --namespace=fluentd
