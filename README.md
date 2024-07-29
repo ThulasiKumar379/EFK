@@ -1,5 +1,6 @@
 # EFK
 kubectl create ns fluentd
+
 #configmap fluentd
 kubectl apply -f fluentd-configmap.yaml
 
