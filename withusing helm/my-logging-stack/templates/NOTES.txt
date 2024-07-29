@@ -1,0 +1,36 @@
+1. Elasticsearch has been deployed.
+
+{{- if eq .Values.elasticsearch.service.type "LoadBalancer" }}
+   Elasticsearch is accessible via LoadBalancer at:
+   http://{{ .Release.Name }}-elasticsearch:{{ .Values.elasticsearch.service.port }}
+{{- else if eq .Values.elasticsearch.service.type "NodePort" }}
+   Elasticsearch is accessible via NodePort at:
+   export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "fullname" . }})
+   export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+   echo http://$NODE_IP:$NODE_PORT
+{{- else if eq .Values.elasticsearch.service.type "ClusterIP" }}
+   Elasticsearch is accessible within the cluster via ClusterIP at:
+   http://{{ .Release.Name }}-elasticsearch:{{ .Values.elasticsearch.service.port }}
+{{- end }}
+
+2. Kibana has been deployed.
+
+{{- if eq .Values.kibana.service.type "LoadBalancer" }}
+   Kibana is accessible via LoadBalancer at:
+   http://{{ .Release.Name }}-kibana:{{ .Values.kibana.service.port }}
+{{- else if eq .Values.kibana.service.type "NodePort" }}
+   Kibana is accessible via NodePort at:
+   export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "fullname" . }})
+   export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+   echo http://$NODE_IP:$NODE_PORT
+{{- else if eq .Values.kibana.service.type "ClusterIP" }}
+   Kibana is accessible within the cluster via ClusterIP at:
+   http://{{ .Release.Name }}-kibana:{{ .Values.kibana.service.port }}
+{{- end }}
+
+3. Fluentd has been deployed as a DaemonSet and is collecting logs from your nodes.
+
+4. Port-forward commands (if necessary):
+   You can use port-forwarding to access Elasticsearch and Kibana from your local machine:
+   Elasticsearch: kubectl port-forward svc/{{ .Release.Name }}-elasticsearch {{ .Values.elasticsearch.service.port }}:{{ .Values.elasticsearch.service.port }}
+   Kibana: kubectl port-forward svc/{{ .Release.Name }}-kibana {{ .Values.kibana.service.port }}:{{ .Values.kibana.service.port }}

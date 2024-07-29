@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch
+  labels:
+    app: elasticsearch
+spec:
+  selector:
+    matchLabels:
+      app: elasticsearch
+  replicas: {{ .Values.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      initContainers:
+      - name: vm-max-fix
+        image: busybox
+        command: ["sysctl", "-w", "vm.max_map_count=262144"]
+        securityContext:
+          privileged: true
+      containers:
+      - name: elasticsearch
+        image: {{ .Values.elasticsearch.image }}
+        ports:
+        - containerPort: 9200
+        env:
+        - name: node.name
+          value: "elasticsearch"
+        - name: cluster.initial_master_nodes
+          value: "elasticsearch"
+        - name: bootstrap.memory_lock
+          value: "false"
+        - name: ES_JAVA_OPTS
+          value: "-Xms512m -Xmx512m"
+        - name: xpack.security.enabled
+          value: "true"
+        - name: ELASTIC_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: elasticsearch-credentials
+              key: password
+        resources:
+          {{- if .Values.elasticsearch.resources }}
+          {{- toYaml .Values.elasticsearch.resources | nindent 10 }}
+          {{- else }}
+          {}
+          {{- end }}
+

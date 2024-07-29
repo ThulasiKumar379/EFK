@@ -1,0 +1,278 @@
+my-logging-stack/
+├── Chart.yaml
+├── values.yaml
+├── templates/
+│   ├── NOTES.txt
+│   ├── _helpers.tpl
+│   ├── elasticsearch-deployment.yaml
+│   ├── elasticsearch-service.yaml
+│   ├── kibana-deployment.yaml
+│   ├── kibana-service.yaml
+│   ├── fluentd-daemonset.yaml
+│   ├── fluentd-configmap.yaml
+│   └── serviceaccount.yaml
+
+==================Chart.yaml
+apiVersion: v2
+name: my-logging-stack
+description: A Helm chart for Kubernetes to deploy Elasticsearch, Kibana, and Fluentd
+type: application
+version: 0.1.0
+appVersion: "1.0"
+
+=====================values.yaml
+replicaCount: 1
+
+elasticsearch:
+  image: "elasticsearch:7.9.1"
+  resources: {}
+  service:
+    port: 9200
+
+kibana:
+  image: "kibana:7.9.1"
+  resources: {}
+  service:
+    port: 5601
+
+fluentd:
+  image: "aimvector/fluentd-demo"
+  resources: {}
+  config: |
+    ################################################################
+    # This source gets all logs from local docker host
+    @include pods-kind-fluent.conf
+    @include elastic-fluent.conf
+
+==============================templates/elasticsearch-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch
+  labels:
+    app: elasticsearch
+spec:
+  selector:
+    matchLabels:
+      app: elasticsearch
+  replicas: {{ .Values.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      initContainers:
+      - name: vm-max-fix
+        image: busybox
+        command: ["sysctl", "-w", "vm.max_map_count=262144"]
+        securityContext:
+          privileged: true
+      containers:
+      - name: elasticsearch
+        image: {{ .Values.elasticsearch.image }}
+        ports:
+        - containerPort: 9200
+        env:
+        - name: node.name
+          value: "elasticsearch"
+        - name: cluster.initial_master_nodes
+          value: "elasticsearch"
+        - name: bootstrap.memory_lock
+          value: "false"
+        - name: ES_JAVA_OPTS
+          value: "-Xms512m -Xmx512m"
+        resources:
+{{ toYaml .Values.elasticsearch.resources | indent 10 }}
+
+=================================================templates/elasticsearch-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  labels:
+    app: elasticsearch
+spec:
+  type: ClusterIP
+  selector:
+    app: elasticsearch
+  ports:
+    - protocol: TCP
+      port: {{ .Values.elasticsearch.service.port }}
+      targetPort: 9200
+
+=======================================Kibana Deployment Template(templates/kibana-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  labels:
+    app: kibana
+spec:
+  selector:
+    matchLabels:
+      app: kibana
+  replicas: {{ .Values.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+      - name: kibana
+        image: {{ .Values.kibana.image }}
+        ports:
+        - containerPort: 5601
+        env:
+        - name: ELASTICSEARCH_URL
+          value: "http://elasticsearch:9200"
+        - name: ELASTICSEARCH_HOSTS
+          value: "http://elasticsearch:9200"
+        resources:
+{{ toYaml .Values.kibana.resources | indent 10 }}
+
+===============================templates/kibana-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  labels:
+    app: kibana
+spec:
+  type: ClusterIP
+  selector:
+    app: kibana
+  ports:
+    - protocol: TCP
+      port: {{ .Values.kibana.service.port }}
+      targetPort: 5601
+
+===========================Fluentd DaemonSet Template (templates/fluentd-daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentd
+  namespace: default
+  labels:
+    k8s-app: fluentd-logging
+    version: v1
+spec:
+  selector:
+    matchLabels:
+      k8s-app: fluentd-logging
+      version: v1
+  template:
+    metadata:
+      labels:
+        k8s-app: fluentd-logging
+        version: v1
+    spec:
+      serviceAccount: fluentd
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      containers:
+      - name: fluentd
+        image: {{ .Values.fluentd.image }}
+        env:
+          - name: FLUENT_ELASTICSEARCH_HOST
+            value: "elasticsearch"
+          - name: FLUENT_ELASTICSEARCH_PORT
+            value: "9200"
+        resources:
+{{ toYaml .Values.fluentd.resources | indent 10 }}
+        volumeMounts:
+        - name: fluentd-config
+          mountPath: /fluentd/etc
+        - name: varlog
+          mountPath: /var/log
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: fluentd-config
+        configMap:
+          name: fluentd-config
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+
+=======================================templates/fluentd-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config
+  namespace: default
+data:
+  fluent.conf: |
+    ################################################################
+    # This source gets all logs from local docker host
+    @include pods-kind-fluent.conf
+    @include elastic-fluent.conf
+  pods-kind-fluent.conf: |
+    <source>
+      @type tail
+      read_from_head true
+      tag kubernetes.*
+      path /var/log/containers/*.log
+      pos_file /var/log/fluentd-containers.log.pos
+      exclude_path ["/var/log/containers/fluent*"]
+      <parse>
+        @type regexp
+        #https://regex101.com/r/ZkOBTI/1
+        expression ^(?<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.[^Z]*Z)\s(?<stream>[^\s]+)\s(?<character>[^\s])\s(?<message>.*)$
+      </parse>
+    </source>
+  elastic-fluent.conf: |
+    <match **>
+      @type elasticsearch
+      host "#{ENV['FLUENT_ELASTICSEARCH_HOST'] || 'elasticsearch'}"
+      port "#{ENV['FLUENT_ELASTICSEARCH_PORT'] || '9200'}"
+      index_name fluentd-k8s
+      type_name fluentd
+      include_timestamp true
+
+Deploy the Helm Chart
+
+helm package .
+helm install my-logging-stack ./my-logging-stack-0.1.0.tgz
+helm list
+helm status my-logging-stack
+kubectl get pods
+kubectl get services
+
+cd /root/
+helm install my-logging-stack ./my-logging-stack-0.1.0.tgz
+
+ls /root/
+kibana  my-logging-stack  snap
+root@ip-172-31-30-84:~#
+
+ls /root/my-logging-stack
+
+Navigate to the Chart Directory:
+cd /root/my-logging-stack
+helm package .
+helm install my-logging-stack ./my-logging-stack-0.1.0.tgz
+========
+cd /root/my-logging-stack
+Chart.yaml
+
+apiVersion: v2
+name: my-logging-stack
+description: A Helm chart for Kubernetes
+
+type: application
+
+version: 0.1.0
+
+appVersion: "1.16.0"
+
+helm package .
+ls -l
+helm install my-logging-stack ./my-logging-stack-0.1.0.tgz
+
+

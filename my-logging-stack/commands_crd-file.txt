@@ -1,0 +1,29 @@
+mkdir my-logging-stack
+cd my-logging-stack
+helm create .
+
+kubectl create secret generic elasticsearch-credentials --from-literal=username='elastic' --from-literal=password='your-password' --namespace=fluentd
+
+helm package .
+
+helm install my-logging-stack ./my-logging-stack-0.1.0.tgz
+
+output
+root@ip-172-31-30-84:~/my-logging-stack# helm install my-logging-stack ./my-logging-stack-0.1.0.tgz
+NAME: my-logging-stack
+LAST DEPLOYED: Fri Jul 26 05:26:14 2024
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+NOTES:
+1. Get the application URL by running these commands:
+  export POD_NAME=$(kubectl get pods --namespace default -l "app.kubernetes.io/name=my-logging-stack,app.kubernetes.io/instance=my-logging-stack" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace default $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:8080 to use your application"
+  kubectl --namespace default port-forward $POD_NAME 8080:$CONTAINER_PORT
+root@ip-172-31-30-84:~/my-logging-stack#
+
+
+kubectl create secret generic elasticsearch-credentials --from-literal=password='kibana'
+
+kubectl create secret generic elasticsearch-credentials --from-literal=username='elastic' --from-literal=password='kibana' --namespace=fluentd
