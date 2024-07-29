@@ -74,7 +74,7 @@ data:
   elastic-fluent.conf: |-
     <match **>
       @type elasticsearch
-      host "#{ENV['FLUENT_ELASTICSEARCH_HOST'] || 'elasticsearch.elastic-kibana'}"
+      host "#{ENV['FLUENT_ELASTICSEARCH_HOST'] || 'elasticsearch.default.svc.cluster.local'}"
       port "#{ENV['FLUENT_ELASTICSEARCH_PORT'] || '9200'}"
       user "#{ENV['FLUENT_ELASTICSEARCH_USER']}"
       password "#{ENV['FLUENT_ELASTICSEARCH_PASSWORD']}"
